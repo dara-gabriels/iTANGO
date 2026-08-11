@@ -1,0 +1,60 @@
+# devops/docker/Dockerfile.web
+# Multi-stage build for the iTANGO Next.js app (web/itango-web).
+# Build context should be the repo root so this can COPY web/itango-web/.
+#
+# Usage:
+#   docker build -f devops/docker/Dockerfile.web -t itango-web:latest .
+
+# ---- Dependencies ----------------------------------------------------------
+FROM node:20-alpine AS deps
+WORKDIR /app
+COPY web/itango-web/package.json web/itango-web/package-lock.json* ./
+RUN npm ci
+
+# ---- Build ------------------------------------------------------------------
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY web/itango-web/ ./
+
+# Public env vars must be present at BUILD time for Next.js to inline them
+# into the client bundle — passed as build args, not baked into the image
+# as secrets. Server-only secrets (service role keys, PSP secrets) are never
+# build args; they're injected at container runtime via Fly secrets instead.
+ARG NEXT_PUBLIC_SUPABASE_URL
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
+ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
+ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
+ENV NEXT_TELEMETRY_DISABLED=1
+
+RUN npm run build
+
+# ---- Runtime ------------------------------------------------------------------
+# Uses Next.js "standalone" output (requires `output: 'standalone'` in
+# next.config.js — see note below) so the final image only contains the
+# minimal server bundle, not the full node_modules tree.
+FROM node:20-alpine AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# Non-root user — containers should never run as root in production.
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
+COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+USER nextjs
+EXPOSE 3000
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+
+# Used by Fly.io health checks (fly.toml) and Kubernetes readiness/liveness
+# probes at the future graduation point — same endpoint serves both.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1
+
+CMD ["node", "server.js"]

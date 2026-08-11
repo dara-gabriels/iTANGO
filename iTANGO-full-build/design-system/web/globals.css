@@ -1,0 +1,133 @@
+/* globals.css
+   Generated from design-tokens.json — keep in sync.
+   Dark is the default brand experience (matches the mobile app);
+   :root here IS the dark theme, [data-theme="light"] overrides it. */
+
+@import "tailwindcss";
+
+:root {
+  /* Background */
+  --color-bg-base: #0A0A0F;
+  --color-bg-surface: #15151F;
+  --color-bg-surface-elevated: #1E1E2A;
+
+  /* Brand */
+  --color-brand-gradient-start: #B0202A;
+  --color-brand-gradient-end: #4A0E12;
+  --color-brand-primary: #9E1B23;
+  --color-brand-primary-deep: #6E1319;
+  --color-brand-logo-black: #181212;
+
+  /* Accent */
+  --color-accent-cyan: #22D3EE;
+  --color-accent-amber: #F59E0B;
+  --color-accent-emerald: #34D399;
+
+  /* Status */
+  --color-status-live: #FF2D55;
+  --color-status-warmth-hot: #FF3D71;
+  --color-status-warmth-warm: #F59E0B;
+  --color-status-success: #34D399;
+  --color-status-warning: #FBBF24;
+  --color-status-danger: #EF4444;
+  --color-status-info: #22D3EE;
+
+  /* Text */
+  --color-text-primary: #FFFFFF;
+  --color-text-secondary: #A1A1AA;
+  --color-text-tertiary: #71717A;
+  --color-text-link: #C084FC;
+
+  /* Border */
+  --color-border-subtle: #27272F;
+  --color-border-default: #3F3F4A;
+
+  /* Gradients (as CSS gradient strings for direct use in background-image) */
+  --gradient-primary-cta: linear-gradient(135deg, var(--color-brand-gradient-start), var(--color-brand-gradient-end));
+  --gradient-warmth-hot: linear-gradient(90deg, var(--color-status-warmth-hot), var(--color-status-warmth-warm));
+  --gradient-live-badge: linear-gradient(90deg, var(--color-status-live), var(--color-brand-primary));
+
+  /* Radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 28px;
+  --radius-pill: 999px;
+
+  /* Elevation */
+  --shadow-sm: 0px 1px 2px rgba(0,0,0,0.24);
+  --shadow-md: 0px 4px 12px rgba(0,0,0,0.32);
+  --shadow-lg: 0px 8px 24px rgba(0,0,0,0.40);
+  --shadow-glow: 0px 0px 24px rgba(255,45,138,0.35);
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 320ms;
+}
+
+[data-theme="light"] {
+  --color-bg-base: #FAFAFA;
+  --color-bg-surface: #FFFFFF;
+  --color-bg-surface-elevated: #F4F4F6;
+
+  --color-text-primary: #0A0A0F;
+  --color-text-secondary: #52525B;
+  --color-text-tertiary: #A1A1AA;
+
+  --color-border-subtle: #E4E4E7;
+  --color-border-default: #D4D4D8;
+
+  /* Brand gradients and status colors stay constant across themes on purpose
+     — this is iTANGO's one fixed visual signature regardless of mode. */
+}
+
+body {
+  background: var(--color-bg-base);
+  color: var(--color-text-primary);
+  font-family: var(--font-inter), system-ui, sans-serif;
+}
+
+/* Reusable utility classes for the brand gradient CTA, since Tailwind
+   arbitrary values get unwieldy when reused across many components. */
+.btn-gradient-primary {
+  background-image: var(--gradient-primary-cta);
+  border-radius: var(--radius-pill);
+  color: white;
+  font-weight: 700;
+  transition: transform var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard);
+}
+.btn-gradient-primary:hover {
+  box-shadow: var(--shadow-glow);
+  transform: translateY(-1px);
+}
+
+.badge-live {
+  background-image: var(--gradient-live-badge);
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  padding: 2px 10px;
+  color: white;
+}
+
+.story-ring {
+  border: 2.5px solid transparent;
+  border-radius: var(--radius-pill);
+  background-image: var(--gradient-primary-cta);
+  background-origin: border-box;
+  -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+.warmth-bar {
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background-image: var(--gradient-warmth-hot);
+}

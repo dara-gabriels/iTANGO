@@ -1,0 +1,124 @@
+# .github/workflows/deploy-staging.yml
+#
+# Triggers on push to `develop`. Deploy ORDER matters and is enforced via
+# job dependencies (needs:), not just file order: database migrations must
+# land before Edge Functions deploy (functions may reference new
+# tables/columns), and Edge Functions must be live before the web app
+# deploys (the web app calls them). Deploying in the wrong order is a real,
+# common source of "works on staging sometimes" bugs.
+
+name: Deploy to Staging
+
+on:
+  push:
+    branches: [develop]
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false # never cancel a staging deploy mid-flight — let it finish or fail cleanly
+
+jobs:
+  migrate-database:
+    name: Apply database migrations
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Push migrations to staging project
+        run: supabase db push --db-url "${{ secrets.SUPABASE_STAGING_DB_URL }}"
+
+  deploy-edge-functions:
+    name: Deploy Edge Functions
+    needs: migrate-database
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Deploy all functions
+        working-directory: backend
+        run: |
+          supabase functions deploy \
+            --project-ref "${{ secrets.SUPABASE_STAGING_PROJECT_REF }}"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      # Three functions are intentionally deployed with --no-verify-jwt (see
+      # backend/README.md deployment section: webhooks-paystack authenticates
+      # via signature not JWT, nearby-events and send-push-notification are
+      # called without a user JWT). The default deploy above applies to the
+      # rest; this step overrides those three specifically:
+      - name: Redeploy JWT-exempt functions
+        working-directory: backend
+        run: |
+          supabase functions deploy webhooks-paystack --project-ref "${{ secrets.SUPABASE_STAGING_PROJECT_REF }}" --no-verify-jwt
+          supabase functions deploy nearby-events --project-ref "${{ secrets.SUPABASE_STAGING_PROJECT_REF }}" --no-verify-jwt
+          supabase functions deploy send-push-notification --project-ref "${{ secrets.SUPABASE_STAGING_PROJECT_REF }}" --no-verify-jwt
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+  deploy-web:
+    name: Deploy Web App
+    needs: deploy-edge-functions
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Deploy to Fly.io (staging)
+        run: |
+          flyctl deploy \
+            --config devops/terraform/environments/staging/fly.staging.toml \
+            --build-arg NEXT_PUBLIC_SUPABASE_URL="${{ secrets.SUPABASE_STAGING_URL }}" \
+            --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY="${{ secrets.SUPABASE_STAGING_ANON_KEY }}" \
+            --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_STAGING }}
+
+  smoke-test:
+    name: Post-deploy smoke test
+    needs: deploy-web
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit the health check endpoint
+        run: |
+          for i in 1 2 3 4 5; do
+            status=$(curl -s -o /dev/null -w "%{http_code}" https://staging.itango.app/api/health)
+            if [ "$status" = "200" ]; then
+              echo "Health check passed"
+              exit 0
+            fi
+            echo "Attempt $i: got $status, retrying in 10s..."
+            sleep 10
+          done
+          echo "Health check failed after 5 attempts"
+          exit 1
+
+  e2e-tests:
+    name: E2E tests against staging
+    needs: smoke-test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web/itango-web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium webkit
+      - name: Run Playwright against the real staging deployment
+        run: npx playwright test
+        env:
+          E2E_BASE_URL: https://staging.itango.app
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: web/itango-web/playwright-report/
+          retention-days: 14

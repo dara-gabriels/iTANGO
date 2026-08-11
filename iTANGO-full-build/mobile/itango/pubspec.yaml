@@ -1,0 +1,85 @@
+name: itango
+description: iTANGO — Social Discovery Platform for nightlife, events, and experiences.
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+  flutter: ">=3.22.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State management & DI
+  flutter_riverpod: ^2.5.1
+  riverpod_annotation: ^2.3.5
+
+  # Routing
+  go_router: ^14.2.0
+
+  # Networking
+  dio: ^5.5.0
+
+  # Backend
+  supabase_flutter: ^2.5.6
+
+  # Push notifications
+  firebase_core: ^3.1.0
+  firebase_messaging: ^15.0.3
+
+  # Realtime/UI helpers
+  cached_network_image: ^3.4.0
+  flutter_svg: ^2.0.10+1
+  lottie: ^3.1.2
+  intl: ^0.19.0
+  geolocator: ^13.0.1
+  permission_handler: ^11.3.1
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^5.2.3
+  local_auth: ^2.3.0 # biometric login
+  url_launcher: ^6.3.0
+  sentry_flutter: ^8.9.0
+  image_picker: ^1.1.2
+  record: ^5.1.2
+  audioplayers: ^6.1.0
+  video_player: ^2.9.1
+
+  # Env/config
+  flutter_dotenv: ^5.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  riverpod_generator: ^2.4.0
+  build_runner: ^2.4.11
+  custom_lint: ^0.6.4
+  riverpod_lint: ^2.3.10
+  flutter_lints: ^4.0.0
+  mocktail: ^1.0.4
+  integration_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/icons/
+    - .env
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
+    - family: PlayfairDisplay
+      fonts:
+        - asset: assets/fonts/PlayfairDisplay-Regular.ttf
+        - asset: assets/fonts/PlayfairDisplay-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/PlayfairDisplay-Italic.ttf
+          style: italic

@@ -1,0 +1,333 @@
+openapi: 3.0.3
+info:
+  title: iTANGO API
+  version: "1.0.0"
+  description: >
+    Core REST API for iTANGO, backed by Supabase (PostgREST auto-generated
+    CRUD + custom Edge Functions for business logic that needs transactional
+    integrity, PSP integration, or side effects beyond a single-table write).
+    Auth endpoints are documented separately in Phase 6.
+servers:
+  - url: https://api.itango.app/v1
+    description: Production (Cloudflare-fronted)
+  - url: https://staging-api.itango.app/v1
+    description: Staging
+
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Supabase Auth JWT, short-lived with refresh rotation (Phase 6)
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        request_id:
+          type: string
+
+    Event:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        organizer_id: { type: string, format: uuid }
+        title: { type: string }
+        description: { type: string }
+        cover_url: { type: string, format: uri }
+        event_type: { type: string, enum: [party, concert, hangout, private_party, festival, sports, other] }
+        visibility: { type: string, enum: [public, friends_only, private, invite_only] }
+        status: { type: string, enum: [draft, published, live, ended, cancelled] }
+        start_time: { type: string, format: date-time }
+        end_time: { type: string, format: date-time }
+        venue_id: { type: string, format: uuid }
+        live_attendee_count: { type: integer }
+
+    EventNearby:
+      allOf:
+        - $ref: '#/components/schemas/Event'
+        - type: object
+          properties:
+            distance_km: { type: number, format: float }
+
+    Ticket:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        event_id: { type: string, format: uuid }
+        name: { type: string }
+        ticket_type: { type: string, enum: [general, vip, early_bird, student, group, table] }
+        price: { type: number, format: float }
+        currency: { type: string, example: NGN }
+        quantity_total: { type: integer }
+        quantity_sold: { type: integer }
+
+    TicketPurchaseRequest:
+      type: object
+      required: [ticket_id, quantity, payment_provider]
+      properties:
+        ticket_id: { type: string, format: uuid }
+        quantity: { type: integer, minimum: 1, default: 1 }
+        payment_provider: { type: string, enum: [flutterwave, paystack, monnify, fincra, apple_pay, google_pay, wallet] }
+        split_with_user_ids:
+          type: array
+          items: { type: string, format: uuid }
+          description: Optional — if present, initiates a split-payment flow instead of single-payer.
+
+    TicketPurchaseResponse:
+      type: object
+      properties:
+        ticket_purchase_id: { type: string, format: uuid }
+        status: { type: string, enum: [pending, paid, refunded, cancelled] }
+        payment_redirect_url:
+          type: string
+          format: uri
+          description: PSP-hosted checkout URL the client should open; null for wallet payments (settled synchronously).
+        qr_code: { type: string }
+
+    CheckInRequest:
+      type: object
+      required: [event_id, method]
+      properties:
+        event_id: { type: string, format: uuid }
+        method: { type: string, enum: [qr, geofence, manual_organizer] }
+        qr_token:
+          type: string
+          description: Required when method = qr. Signed token embedded in the attendee's ticket QR, verified server-side.
+        location:
+          type: object
+          properties:
+            lat: { type: number }
+            lng: { type: number }
+          description: Required when method = geofence.
+
+    CheckInResponse:
+      type: object
+      properties:
+        check_in_id: { type: string, format: uuid }
+        energy_awarded: { type: integer }
+        chat_room_conversation_id: { type: string, format: uuid }
+
+    DiscoverPerson:
+      type: object
+      properties:
+        user_id: { type: string, format: uuid }
+        username: { type: string }
+        display_name: { type: string }
+        avatar_url: { type: string }
+        energy_score: { type: integer }
+        distance_km: { type: number }
+        vibe_tags:
+          type: array
+          items: { type: string, enum: [turnt, chill, networking, dancing, foodie, music_lover] }
+        mutual_event_count: { type: integer }
+
+paths:
+  /events/nearby:
+    get:
+      summary: Nearby live/upcoming public events
+      tags: [Events]
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          schema: { type: number }
+        - name: lng
+          in: query
+          required: true
+          schema: { type: number }
+        - name: radius_km
+          in: query
+          schema: { type: number, default: 10 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20, maximum: 50 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/EventNearby' }
+        '400': { description: Invalid coordinates, $ref: '#/components/schemas/Error' }
+
+  /events:
+    post:
+      summary: Create an event (organizer)
+      tags: [Events]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Event' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Event' }
+        '403': { description: Not authorized to create events }
+
+  /events/{eventId}:
+    get:
+      summary: Get event details
+      tags: [Events]
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Event' }
+        '404': { description: Not found }
+
+  /events/{eventId}/tickets:
+    get:
+      summary: List tickets for an event
+      tags: [Ticketing]
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Ticket' }
+
+  /tickets/purchase:
+    post:
+      summary: Purchase ticket(s) — initiates payment with the chosen PSP
+      description: >
+        Creates a `ticket_purchases` row in `pending` status and returns a
+        PSP-hosted checkout URL (or settles immediately if provider=wallet
+        and balance suffices). Final confirmation happens asynchronously via
+        the PSP webhook (see /webhooks/{provider}), which flips status to
+        `paid` and triggers ticket count increment + QR/wallet-pass generation.
+      tags: [Ticketing]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TicketPurchaseRequest' }
+      responses:
+        '201':
+          description: Purchase initiated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TicketPurchaseResponse' }
+        '409': { description: Sold out — insufficient ticket quantity remaining }
+
+  /webhooks/{provider}:
+    post:
+      summary: PSP payment webhook (server-to-server, signature-verified)
+      description: >
+        Not called by clients. Each PSP (flutterwave/paystack/monnify/fincra)
+        posts payment status changes here. Signature verification uses each
+        provider's webhook secret; requests failing verification are rejected
+        with 401 and logged to audit_logs, never silently dropped.
+      tags: [Payments]
+      security: [] # PSP webhooks authenticate via signature header, not bearer JWT
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema: { type: string, enum: [flutterwave, paystack, monnify, fincra] }
+      responses:
+        '200': { description: Acknowledged }
+        '401': { description: Signature verification failed }
+
+  /checkins:
+    post:
+      summary: Check in to an event (QR, geofence, or organizer-manual)
+      description: >
+        This is the core trust primitive of the platform. A successful
+        check-in gates access to the event's chat room and awards Energy
+        Score — both handled server-side via database triggers, not by the
+        client, so they cannot be spoofed by a modified app.
+      tags: [Events]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CheckInRequest' }
+      responses:
+        '201':
+          description: Checked in
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CheckInResponse' }
+        '400': { description: Invalid QR token or location outside geofence radius }
+        '409': { description: Already checked in to this event }
+
+  /discover/people:
+    get:
+      summary: Vibe-tag filtered nearby people
+      tags: [Discover]
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          schema: { type: number }
+        - name: lng
+          in: query
+          required: true
+          schema: { type: number }
+        - name: vibe_tag
+          in: query
+          schema: { type: string, enum: [turnt, chill, networking, dancing, foodie, music_lover] }
+        - name: radius_km
+          in: query
+          schema: { type: number, default: 5 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/DiscoverPerson' }
+
+  /feed/home:
+    get:
+      summary: Home feed — blended posts from followed/friend users
+      tags: [Feed]
+      parameters:
+        - name: before
+          in: query
+          schema: { type: string, format: date-time }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        '200': { description: OK }
+
+  /vouchers/{voucherId}/redeem:
+    post:
+      summary: Redeem a claimed voucher at point of sale
+      tags: [Vouchers]
+      parameters:
+        - name: voucherId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Redeemed }
+        '404': { description: Voucher not claimed by this user, or already redeemed }

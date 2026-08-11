@@ -1,0 +1,46 @@
+# devops/terraform/environments/production/fly.production.toml
+# Fly.io app config for production. Deployed by .github/workflows/deploy-production.yml.
+# Key differences from staging: never scales to zero, runs 2+ machines
+# for actual availability, and uses Fly's "bluegreen" deployment strategy
+# so a bad release never takes down the whole app — this is the concrete
+# implementation of the Master Plan's "Blue/Green Deployment" requirement,
+# not just a checklist item.
+
+app = "itango-web-production"
+primary_region = "ams"
+
+[build]
+  dockerfile = "../../../docker/Dockerfile.web"
+
+[env]
+  PORT = "3000"
+  NODE_ENV = "production"
+
+[deploy]
+  strategy = "bluegreen"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = false   # production never scales to zero — cold starts are unacceptable for a live nightlife app on a Friday night
+  auto_start_machines = true
+  min_machines_running = 2     # minimum 2 for actual availability during a deploy or a single-machine failure
+
+  [[http_service.checks]]
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/api/health"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 2
+  memory_mb = 1024
+
+# Scale-graduation note (ties to Master Program Plan §7): if sustained
+# traffic pushes this app past what 2-4 shared-CPU machines comfortably
+# handle, the next step is `fly scale count` for more machines in more
+# regions — NOT a rewrite. Migration to AWS ECS/EKS only becomes worth the
+# operational overhead at the traffic/compliance triggers already
+# documented in the Master Plan, not before.

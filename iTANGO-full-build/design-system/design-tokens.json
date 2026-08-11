@@ -1,0 +1,112 @@
+{
+  "meta": {
+    "name": "iTANGO Design System",
+    "version": "1.0.0",
+    "source": "Extracted from iTANGO Figma Make prototype",
+    "description": "Single source of truth. Flutter ThemeData and Tailwind config are both generated from this file — edit here first."
+  },
+  "color": {
+    "background": {
+      "base": "#0A0A0F",
+      "surface": "#15151F",
+      "surfaceElevated": "#1E1E2A",
+      "overlay": "#000000B3"
+    },
+    "brand": {
+      "gradientStart": "#B0202A",
+      "gradientEnd": "#1A0E0F",
+      "primary": "#9E1B23",
+      "primaryDeep": "#6E1319",
+      "logoBlack": "#181212"
+    },
+    "accent": {
+      "cyan": "#22D3EE",
+      "amber": "#F59E0B",
+      "emerald": "#34D399"
+    },
+    "status": {
+      "live": "#FF2D55",
+      "warmthHot": "#FF3D71",
+      "warmthWarm": "#F59E0B",
+      "success": "#34D399",
+      "warning": "#FBBF24",
+      "danger": "#EF4444",
+      "info": "#22D3EE"
+    },
+    "text": {
+      "primary": "#FFFFFF",
+      "secondary": "#A1A1AA",
+      "tertiary": "#71717A",
+      "inverse": "#0A0A0F",
+      "link": "#C084FC"
+    },
+    "border": {
+      "subtle": "#27272F",
+      "default": "#3F3F4A"
+    },
+    "light": {
+      "background": {
+        "base": "#FAFAFA",
+        "surface": "#FFFFFF",
+        "surfaceElevated": "#F4F4F6"
+      },
+      "text": {
+        "primary": "#0A0A0F",
+        "secondary": "#52525B",
+        "tertiary": "#A1A1AA"
+      },
+      "border": {
+        "subtle": "#E4E4E7",
+        "default": "#D4D4D8"
+      }
+    }
+  },
+  "gradient": {
+    "primaryCta": { "from": "#B0202A", "to": "#4A0E12", "angle": "135deg" },
+    "warmthHot": { "from": "#FF3D71", "to": "#F59E0B", "angle": "90deg" },
+    "liveBadge": { "from": "#FF2D55", "to": "#9E1B23", "angle": "90deg" }
+  },
+  "typography": {
+    "fontFamily": {
+      "display": "Playfair Display",
+      "wordmark": "Playfair Display",
+      "body": "Inter",
+      "mono": "JetBrains Mono"
+    },
+    "scale": {
+      "display": { "size": 30, "lineHeight": 36, "weight": 700, "letterSpacing": -0.5 },
+      "h1": { "size": 24, "lineHeight": 30, "weight": 700, "letterSpacing": -0.25 },
+      "h2": { "size": 20, "lineHeight": 26, "weight": 700, "letterSpacing": 0 },
+      "h3": { "size": 17, "lineHeight": 22, "weight": 600, "letterSpacing": 0 },
+      "bodyLarge": { "size": 16, "lineHeight": 22, "weight": 400, "letterSpacing": 0 },
+      "body": { "size": 14, "lineHeight": 20, "weight": 400, "letterSpacing": 0 },
+      "bodySmall": { "size": 13, "lineHeight": 18, "weight": 400, "letterSpacing": 0 },
+      "label": { "size": 12, "lineHeight": 16, "weight": 600, "letterSpacing": 0.6, "uppercase": true },
+      "numericStat": { "size": 18, "lineHeight": 22, "weight": 700, "letterSpacing": 0, "tabular": true },
+      "caption": { "size": 11, "lineHeight": 14, "weight": 500, "letterSpacing": 0.2 }
+    }
+  },
+  "spacing": {
+    "0": 0, "1": 4, "2": 8, "3": 12, "4": 16, "5": 20, "6": 24,
+    "8": 32, "10": 40, "12": 48, "16": 64, "20": 80
+  },
+  "radius": {
+    "sm": 8, "md": 12, "lg": 16, "xl": 20, "2xl": 28, "pill": 999, "circle": 9999
+  },
+  "elevation": {
+    "sm": "0px 1px 2px rgba(0,0,0,0.24)",
+    "md": "0px 4px 12px rgba(0,0,0,0.32)",
+    "lg": "0px 8px 24px rgba(0,0,0,0.40)",
+    "glow": "0px 0px 24px rgba(255,45,138,0.35)"
+  },
+  "motion": {
+    "duration": { "fast": 120, "base": 200, "slow": 320, "storyProgress": 5000 },
+    "easing": { "standard": "cubic-bezier(0.4, 0, 0.2, 1)", "spring": "cubic-bezier(0.34, 1.56, 0.64, 1)" }
+  },
+  "component": {
+    "bottomNav": { "height": 64, "activeIndicatorGradient": "primaryCta" },
+    "fab": { "size": 56, "gradient": "primaryCta", "elevation": "glow" },
+    "storyRing": { "width": 2.5, "gradient": "primaryCta", "viewedColor": "border.default" },
+    "avatarBadge": { "size": 20, "position": "bottom-right" }
+  }
+}

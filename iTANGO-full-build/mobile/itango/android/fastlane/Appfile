@@ -1,0 +1,3 @@
+# mobile/itango/android/fastlane/Appfile
+json_key_file(ENV["PLAY_STORE_JSON_KEY_PATH"])
+package_name("app.itango.mobile") # must match android/app/build.gradle's applicationId exactly

@@ -1,0 +1,66 @@
+# .github/workflows/terraform-plan.yml
+#
+# Runs `terraform plan` (never `apply`) on any PR touching devops/terraform/**,
+# for both environments, and posts the plan output as a PR comment so a
+# human reviews the actual infrastructure diff before merging — the same
+# review discipline as a code diff, applied to infrastructure.
+#
+# Apply is intentionally a separate, manual step (see devops/terraform/README.md)
+# — this workflow never runs `terraform apply`, by design.
+
+name: Terraform Plan
+
+on:
+  pull_request:
+    paths:
+      - "devops/terraform/**"
+
+jobs:
+  plan:
+    strategy:
+      matrix:
+        environment: [staging, production]
+    name: Plan (${{ matrix.environment }})
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: devops/terraform/environments/${{ matrix.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+
+      - run: terraform init
+        env:
+          TF_TOKEN_app_terraform_io: ${{ secrets.TF_CLOUD_TOKEN }}
+
+      - run: terraform validate
+
+      - name: Plan
+        id: plan
+        run: |
+          terraform plan -no-color \
+            -var="cloudflare_api_token=${{ secrets.CLOUDFLARE_API_TOKEN }}" \
+            -var="cloudflare_zone_id=${{ secrets.CLOUDFLARE_ZONE_ID }}" \
+            -var="upstash_email=${{ secrets.UPSTASH_EMAIL }}" \
+            -var="upstash_api_key=${{ secrets.UPSTASH_API_KEY }}" \
+            > plan_output.txt 2>&1 || echo "PLAN_FAILED=true" >> "$GITHUB_ENV"
+          cat plan_output.txt
+        env:
+          TF_TOKEN_app_terraform_io: ${{ secrets.TF_CLOUD_TOKEN }}
+
+      - name: Comment plan on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('devops/terraform/environments/${{ matrix.environment }}/plan_output.txt', 'utf8').slice(0, 60000);
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `### Terraform Plan — ${{ matrix.environment }}\n\`\`\`\n${plan}\n\`\`\``,
+            });
+
+      - name: Fail job if plan errored
+        if: env.PLAN_FAILED == 'true'
+        run: exit 1

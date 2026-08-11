@@ -1,0 +1,109 @@
+# .github/workflows/ci.yml
+# Runs on every PR. Deliberately does NOT deploy anything — this workflow's
+# only job is "would this be safe to merge," answered independently for
+# each of the three codebases (web, backend, mobile) since a PR touching
+# only mobile code shouldn't wait on web's build, and vice versa.
+
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+
+jobs:
+  web-ci:
+    name: Web (Next.js)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web/itango-web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: web/itango-web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run test
+      - run: npm run build
+        env:
+          # Dummy values sufficient for a build-time check — real secrets
+          # are never needed just to confirm the app compiles.
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-key-for-ci-build-only
+
+  backend-ci:
+    name: Backend (Edge Functions)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+      # `deno check` catches type errors across all functions without
+      # needing a live Supabase instance — genuine unit tests for the
+      # functions (mocking the Supabase client) are a Phase 14 follow-up,
+      # tracked in backend/README.md's testing strategy section.
+      - name: Type-check all Edge Functions
+        run: |
+          for dir in backend/supabase/functions/*/; do
+            if [ -f "$dir/index.ts" ]; then
+              echo "Checking $dir"
+              deno check "$dir/index.ts"
+            fi
+          done
+
+      - name: Run Edge Function unit tests
+        run: deno test --allow-env backend/supabase/functions/checkins/tests/
+
+  database-ci:
+    name: Database migrations (dry run)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:15-3.4
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply all migrations against a throwaway Postgres instance
+        env:
+          PGPASSWORD: postgres
+        run: |
+          # This is the "migration idempotency test" described in
+          # database/README.md's testing strategy — every migration must
+          # apply cleanly, in order, on a fresh database, on every PR, not
+          # just when someone remembers to check locally.
+          for f in database/migrations/*.sql; do
+            echo "Applying $f"
+            psql -h localhost -U postgres -d postgres -f "$f"
+          done
+
+  mobile-ci:
+    name: Mobile (Flutter)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile/itango
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.22.0"
+          channel: "stable"
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+      # A full `flutter build` (appbundle/ipa) is intentionally NOT run in
+      # this general CI job — it requires signing configuration this
+      # workflow doesn't have and would fail every PR for a reason
+      # unrelated to code correctness. Signed builds happen in
+      # mobile-release.yml, gated to release branches/tags only.

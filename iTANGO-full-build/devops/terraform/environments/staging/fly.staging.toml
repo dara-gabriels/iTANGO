@@ -1,0 +1,32 @@
+# devops/terraform/environments/staging/fly.staging.toml
+# Fly.io app config for staging. Deployed by .github/workflows/deploy-staging.yml
+# via `flyctl deploy --config devops/terraform/environments/staging/fly.staging.toml`.
+
+app = "itango-web-staging"
+primary_region = "ams" # Amsterdam — closest Fly region to Lagos with full feature availability at time of writing; revisit if Fly adds a Lagos/West-Africa region
+
+[build]
+  dockerfile = "../../../docker/Dockerfile.web"
+
+[env]
+  PORT = "3000"
+  NODE_ENV = "production"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = true   # staging can scale to zero when idle — real cost saving, no SLA to protect
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/api/health"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 512

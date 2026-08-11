@@ -1,0 +1,48 @@
+# mobile/itango/android/fastlane/Fastfile
+# Requires: bundle exec fastlane android <lane>
+# Setup checklist is in mobile/itango/store-assets/STORE_SUBMISSION_SETUP.md
+# — this file defines the automation; it does NOT work until that setup is done.
+
+default_platform(:android)
+
+platform :android do
+  desc "Run static analysis and tests before any release lane"
+  lane :verify do
+    Dir.chdir("../..") do
+      sh("flutter", "analyze")
+      sh("flutter", "test")
+    end
+  end
+
+  desc "Build and upload a signed App Bundle to the Play Console's internal testing track"
+  lane :internal do
+    verify
+    Dir.chdir("../..") do
+      sh("flutter", "build", "appbundle", "--release")
+    end
+    upload_to_play_store(
+      track: "internal",
+      aab: "../build/app/outputs/bundle/release/app-release.aab",
+      json_key: ENV["PLAY_STORE_JSON_KEY_PATH"], # service account key, see setup doc
+      skip_upload_metadata: false,
+      skip_upload_images: false,
+      skip_upload_screenshots: false,
+    )
+  end
+
+  desc "Promote the current internal-track build to production, staged rollout"
+  lane :promote_to_production do
+    upload_to_play_store(
+      track: "internal",
+      track_promote_to: "production",
+      # Staged rollout, NOT 100% immediately — a bad release should only
+      # affect a fraction of users before someone notices and halts it.
+      # This is the mobile-app equivalent of the web app's blue/green +
+      # automatic-rollback-on-smoke-test-failure pattern; Play Store doesn't
+      # support automatic rollback, so staged rollout + manual monitoring
+      # is the closest achievable equivalent for native releases.
+      rollout: "0.10",
+      json_key: ENV["PLAY_STORE_JSON_KEY_PATH"],
+    )
+  end
+end

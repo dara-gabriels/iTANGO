@@ -1,0 +1,61 @@
+# mobile/itango/ios/fastlane/Fastfile
+# Requires: bundle exec fastlane ios <lane>
+# Setup checklist is in mobile/itango/store-assets/STORE_SUBMISSION_SETUP.md.
+#
+# Uses `match` for certificate/provisioning profile management rather than
+# manually exporting a .p12 and importing it into a CI keychain by hand —
+# match stores certs encrypted in a private git repo and syncs them across
+# machines/CI reproducibly, which is the actual gap flagged (but not solved)
+# in .github/workflows/mobile-release.yml's iOS signing step.
+
+default_platform(:ios)
+
+platform :ios do
+  desc "Fetch/sync signing certificates and provisioning profiles via match"
+  lane :sync_signing do
+    match(
+      type: "appstore",
+      readonly: is_ci, # CI never generates new certs, only reads existing ones — a new cert should always be a deliberate local action
+      git_url: ENV["MATCH_GIT_URL"], # private repo storing encrypted certs, see setup doc
+    )
+  end
+
+  desc "Run static analysis and tests"
+  lane :verify do
+    Dir.chdir("../..") do
+      sh("flutter", "analyze")
+      sh("flutter", "test")
+    end
+  end
+
+  desc "Build and upload to TestFlight"
+  lane :beta do
+    verify
+    sync_signing
+    Dir.chdir("../..") do
+      sh("flutter", "build", "ipa", "--release", "--export-options-plist=ios/ExportOptions.plist")
+    end
+    upload_to_testflight(
+      ipa: "../build/ios/ipa/itango.ipa",
+      skip_waiting_for_build_processing: true,
+      api_key_path: ENV["APP_STORE_CONNECT_API_KEY_PATH"],
+    )
+  end
+
+  desc "Submit the current TestFlight build for App Store review"
+  lane :release do
+    upload_to_app_store(
+      submit_for_review: true,
+      automatic_release: false, # a human presses "release" after Apple approves — never auto-goes-live the moment review passes
+      force: true,
+      skip_metadata: false,
+      skip_screenshots: false,
+      api_key_path: ENV["APP_STORE_CONNECT_API_KEY_PATH"],
+      submission_information: {
+        add_id_info_uses_idfa: false,
+        export_compliance_uses_encryption: true,
+        export_compliance_encryption_updated: false,
+      }
+    )
+  end
+end

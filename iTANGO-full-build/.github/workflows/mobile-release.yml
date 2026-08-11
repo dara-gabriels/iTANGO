@@ -1,0 +1,115 @@
+# .github/workflows/mobile-release.yml
+#
+# Triggers on the same `v*` tags as production web deploys, so a release
+# tag means "this version is going out everywhere," not just the web app.
+#
+# Android: fully automated via Fastlane, uploading to the Play Console
+# INTERNAL TESTING track (never straight to production — see the
+# `promote_to_production` lane in android/fastlane/Fastfile for the
+# separate, deliberate staged-rollout step).
+#
+# iOS: automated up through TestFlight upload via `fastlane match` for
+# certificate management. Submitting the TestFlight build for App Store
+# review (`fastlane ios release`) is NOT run automatically here — that's a
+# deliberate human action, same rationale as production web deploys
+# requiring manual approval.
+#
+# Neither platform can run at all until the manual account/credential setup
+# in mobile/itango/store-assets/STORE_SUBMISSION_SETUP.md is complete —
+# these jobs will fail with clear errors until then, which is correct.
+
+name: Mobile Release Build
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-android:
+    name: Build Android App Bundle
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile/itango
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.22.0"
+          channel: "stable"
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+      # Requires ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD,
+      # ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD, PLAY_STORE_JSON_KEY (base64)
+      # as repo secrets — see mobile/itango/store-assets/STORE_SUBMISSION_SETUP.md.
+      # Until those are provisioned, this step will fail — that's correct
+      # behavior (loud failure) rather than silently producing an unsigned
+      # or unsubmitted build.
+      - name: Decode signing keystore
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/release-keystore.jks
+
+      - name: Decode Play Store service account key
+        run: echo "${{ secrets.PLAY_STORE_JSON_KEY }}" | base64 -d > android/play-store-key.json
+
+      - name: Set up Ruby and Fastlane
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+
+      - name: Build and upload to Play Console internal track
+        working-directory: mobile/itango/android
+        run: bundle exec fastlane android internal
+        env:
+          PLAY_STORE_JSON_KEY_PATH: ../play-store-key.json
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+  build-ios:
+    name: Build iOS Archive & Upload to TestFlight
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: mobile/itango
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.22.0"
+          channel: "stable"
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+      - name: Set up Ruby and Fastlane
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+
+      - name: Decode App Store Connect API key
+        run: echo "${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}" | base64 -d > ios/app-store-connect-key.p8
+
+      - name: Sync signing and upload to TestFlight
+        working-directory: mobile/itango/ios
+        run: bundle exec fastlane ios beta
+        env:
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          APP_STORE_CONNECT_API_KEY_PATH: ../app-store-connect-key.p8
+
+  notify:
+    name: Release summary
+    needs: [build-android, build-ios]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Report outcome
+        run: |
+          echo "Android: uploaded to Play Console internal testing track (needs.build-android.result = ${{ needs.build-android.result }})"
+          echo "iOS: uploaded to TestFlight (needs.build-ios.result = ${{ needs.build-ios.result }})"
+          echo "Neither store submission is auto-promoted to production/public review — see android/fastlane/Fastfile's promote_to_production lane and ios/fastlane/Fastfile's release lane, both of which require a deliberate manual run."

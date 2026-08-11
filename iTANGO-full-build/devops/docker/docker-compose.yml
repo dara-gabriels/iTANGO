@@ -1,0 +1,45 @@
+# devops/docker/docker-compose.yml
+#
+# Local development only. Notably does NOT include Supabase — Postgres,
+# Auth, Realtime, and Edge Functions run via the Supabase CLI's own local
+# stack (`supabase start`, from the `database/` directory), which manages
+# its own Docker containers internally. Duplicating that here would mean
+# two separate Postgres instances that inevitably drift; running one real
+# local Supabase stack via its own CLI is the supported path and what the
+# database/README.md migration instructions assume.
+#
+# Usage:
+#   1. cd database && supabase start        (starts local Postgres/Auth/Realtime on default ports)
+#   2. cd ../devops/docker && docker compose up
+
+services:
+  web:
+    build:
+      context: ../../
+      dockerfile: devops/docker/Dockerfile.web
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: http://host.docker.internal:54321
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${SUPABASE_LOCAL_ANON_KEY}
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_SUPABASE_URL=http://host.docker.internal:54321
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_LOCAL_ANON_KEY}
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+    extra_hosts:
+      # Lets the container reach the host machine's local Supabase stack
+      # (started separately via `supabase start`, listening on the host).
+      - "host.docker.internal:host-gateway"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --save 60 1 --loglevel warning
+
+volumes:
+  redis_data:

@@ -1,0 +1,131 @@
+# .github/workflows/deploy-production.yml
+#
+# Triggers on a `v*` tag push (e.g. `v1.2.0`) — production deploys are a
+# deliberate, named release, never an automatic side effect of merging to
+# main. The `environment: production` on each job ties into a GitHub
+# Environment protection rule requiring manual approval before the job
+# runs — configure this once in Settings -> Environments -> production ->
+# "Required reviewers". This workflow will NOT deploy without that
+# approval, even though the YAML alone doesn't show the gate explicitly.
+
+name: Deploy to Production
+
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  migrate-database:
+    name: Apply database migrations
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Push migrations to production project
+        run: supabase db push --db-url "${{ secrets.SUPABASE_PRODUCTION_DB_URL }}"
+
+  deploy-edge-functions:
+    name: Deploy Edge Functions
+    needs: migrate-database
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - working-directory: backend
+        run: |
+          supabase functions deploy --project-ref "${{ secrets.SUPABASE_PRODUCTION_PROJECT_REF }}"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      - name: Redeploy JWT-exempt functions
+        working-directory: backend
+        run: |
+          supabase functions deploy webhooks-paystack --project-ref "${{ secrets.SUPABASE_PRODUCTION_PROJECT_REF }}" --no-verify-jwt
+          supabase functions deploy nearby-events --project-ref "${{ secrets.SUPABASE_PRODUCTION_PROJECT_REF }}" --no-verify-jwt
+          supabase functions deploy send-push-notification --project-ref "${{ secrets.SUPABASE_PRODUCTION_PROJECT_REF }}" --no-verify-jwt
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+  deploy-web:
+    name: Deploy Web App (blue/green)
+    needs: deploy-edge-functions
+    runs-on: ubuntu-latest
+    environment: production
+    outputs:
+      previous_image: ${{ steps.capture_previous.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      # Captured BEFORE deploying, so the rollback job below has something
+      # concrete to roll back to if the smoke test fails — "rollback" only
+      # means something if you recorded what you're rolling back FROM.
+      - name: Capture currently-running image
+        id: capture_previous
+        run: |
+          current=$(flyctl image show --config devops/terraform/environments/production/fly.production.toml --json | jq -r '.Image')
+          echo "image=$current" >> "$GITHUB_OUTPUT"
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_PRODUCTION }}
+
+      - name: Deploy to Fly.io (production, blue/green)
+        run: |
+          flyctl deploy \
+            --config devops/terraform/environments/production/fly.production.toml \
+            --build-arg NEXT_PUBLIC_SUPABASE_URL="${{ secrets.SUPABASE_PRODUCTION_URL }}" \
+            --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY="${{ secrets.SUPABASE_PRODUCTION_ANON_KEY }}" \
+            --strategy bluegreen \
+            --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_PRODUCTION }}
+
+  smoke-test:
+    name: Post-deploy smoke test
+    needs: deploy-web
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit the health check endpoint
+        run: |
+          for i in 1 2 3 4 5; do
+            status=$(curl -s -o /dev/null -w "%{http_code}" https://itango.app/api/health)
+            if [ "$status" = "200" ]; then
+              echo "Health check passed"
+              exit 0
+            fi
+            echo "Attempt $i: got $status, retrying in 10s..."
+            sleep 10
+          done
+          echo "Health check failed after 5 attempts"
+          exit 1
+
+  rollback-on-failure:
+    name: Automatic rollback
+    needs: [deploy-web, smoke-test]
+    if: failure()
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Roll back to previous image
+        run: |
+          echo "Smoke test failed - rolling back to ${{ needs.deploy-web.outputs.previous_image }}"
+          flyctl deploy \
+            --config devops/terraform/environments/production/fly.production.toml \
+            --image "${{ needs.deploy-web.outputs.previous_image }}" \
+            --strategy immediate \
+            --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_PRODUCTION }}
+      - name: Alert
+        run: |
+          echo "::error::Production deploy failed its smoke test and the WEB APP was rolled back automatically. Database migrations from this release are NOT auto-rolled-back - see devops/scripts/incident-runbook.md before assuming the system is fully back to its prior state."
