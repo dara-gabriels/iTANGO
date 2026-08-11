@@ -1,7 +1,8 @@
 // src/app/admin/events-pending/event-approval-actions.tsx
 "use client";
-
-import { useState } from "react";
+/// <reference types="react" />
+/** @jsxRuntime classic */
+import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 

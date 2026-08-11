@@ -1,0 +1,34 @@
+/** Subset of the web-vitals library's `ReportOpts` passed to metric observers. */
+interface WebVitalsReportOpts {
+    reportAllChanges?: boolean;
+    reportSoftNavs?: boolean;
+}
+type WebVitalsCallbacks = {
+    onLCP: (onReport: (metric: any) => void, opts?: WebVitalsReportOpts) => void;
+    onCLS: (onReport: (metric: any) => void, opts?: WebVitalsReportOpts) => void;
+    onFCP: (onReport: (metric: any) => void, opts?: WebVitalsReportOpts) => void;
+    onINP: (onReport: (metric: any) => void, opts?: WebVitalsReportOpts) => void;
+};
+
+/**
+ * Web Vitals entrypoint (with attribution)
+ *
+ * This bundle includes attribution data which provides additional debugging information:
+ * - Which elements caused layout shifts (CLS)
+ * - Timing breakdowns for LCP
+ * - Interaction targets for INP
+ *
+ * This bundle is ~12KB (vs ~6KB for the non-attribution version).
+ *
+ * Note: Attribution can cause memory issues in SPAs because the onCLS callback
+ * holds references to DOM elements that may be detached during navigation.
+ * Only enable if you need the debugging data.
+ *
+ * Enable via: capture_performance: { web_vitals_attribution: true }
+ *
+ * @see web-vitals.ts for the lighter, default bundle
+ */
+
+declare const postHogWebVitalsCallbacks: WebVitalsCallbacks;
+
+export { postHogWebVitalsCallbacks as default };

@@ -1,4 +1,5 @@
 // src/app/admin/events-pending/page.tsx
+import React from "react";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { EventApprovalActions } from "./event-approval-actions";
 
