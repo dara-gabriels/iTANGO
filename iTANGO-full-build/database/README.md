@@ -16,6 +16,14 @@
 | `migrations/009_app_roles.sql` | Admin/moderator/organizer role table + RLS helper functions |
 | `migrations/010_rls_policies.sql` | Row Level Security policies for every sensitive table |
 | `migrations/011_query_functions.sql` | `nearby_events`, `discover_people`, `home_feed_posts` — the highest-QPS screens, as indexed SQL functions rather than N+1 client queries |
+| `migrations/012_wallet_settlement_function.sql` | Atomic wallet debit function (`FOR UPDATE` row lock, avoids overdraft under concurrent purchases) — added during Phase 5, called by the `tickets-purchase` Edge Function for wallet payments |
+| `migrations/013_find_dm_conversation.sql` | Helper used by the chat feature's "start or get DM" flow, so Discover's "Say Hi" and Profile's "Message" converge on one thread instead of duplicating conversations |
+| `migrations/014_push_notifications.sql` | `device_tokens` table + triggers that populate `notifications` for new messages, check-ins, ticket confirmations, and achievements |
+| `migrations/015_admin_moderation.sql` | Ban/unban functions with audit-log writes, scoped to admin/moderator roles |
+| `migrations/016_event_approval_workflow.sql` | `platform_settings` toggle for self-publish vs. admin-approval-required, plus `publish_event`/`approve_event`/`reject_event` functions |
+| `migrations/017_fix_events_visibility_status_check.sql` | **Security fix** — the original public-visibility RLS policy (migration 010) never checked event `status`, meaning a draft/pending event marked "public" was visible to anyone. Fixed here; see the file's own comment for why it's a new migration rather than an edit to 010. |
+| `migrations/018_message_media_storage_rls.sql` | Storage RLS for the private `message-media` bucket — scopes attachment reads to conversation participants only |
+| `migrations/019_staff_checkin_rls.sql` | RLS policy allowing an event's organizer (or an admin) to insert a check-in on an attendee's behalf — required for the staff QR check-in flow; the original check-in policy only allowed self-insert |
 
 ## Running the migrations
 
@@ -38,9 +46,18 @@ Migrations are numbered and must run in order — later files reference tables/c
 - Storage bucket policies for media (avatars, event covers, post media) — schema references `*_url text` columns; bucket-level RLS is a Supabase Storage concern, covered in Phase 5
 - Full-text/semantic search (pgvector embeddings for AI-powered recommendations) — intentionally not in Phase 4, since it depends on the AI Engineer's embedding strategy in Phase 13
 
-## Testing approach for this schema (feeds into Phase 14)
+## Testing (see `tests/README.md` for full detail)
 
-1. **Migration idempotency test** — `supabase db reset` twice in CI, confirm no errors.
-2. **RLS policy tests** — for each policy in `010_rls_policies.sql`, a paired test asserting both the allowed case and the denied case (e.g. "user A cannot read user B's `check_ins` row"; "user A can read their own"). This is the single highest-value test suite in the whole schema — an RLS gap is a data breach, not a bug.
-3. **Trigger correctness tests** — insert a `check_ins` row, assert: `events.live_attendee_count` incremented, `energy_score_events` row created with `reason = 'event_checkin'`, `profiles.energy_score` recomputed, and the user was added to the event's `conversation_participants`.
-4. **Load test targets** — `nearby_events` and `discover_people` are called on nearly every app open; benchmark p95 latency at expected concurrent-user counts before Phase 7 mobile integration locks in assumptions about client-side caching needs.
+Real pgTAP tests exist now, not just a described approach:
+
+1. **`tests/001_rls_policies_test.sql`** — the highest-value test file in this project: check-in privacy, the check-in-gated-chat trust boundary, payment isolation, audit-log immutability, voucher ownership, profile write scoping.
+2. **`tests/002_event_approval_test.sql`** — proves the migration 017 fix holds: a pending/unapproved event stays invisible to the public even with `visibility = 'public'` set.
+3. **`tests/003_staff_checkin_rls_test.sql`** — proves an organizer can check in an attendee on their behalf, but a random user cannot check anyone into someone else's event.
+
+Run via `supabase test db`. Coverage gaps are documented explicitly in `tests/README.md` rather than implied to be exhaustive.
+
+## Further testing strategy (feeds into Phase 14)
+
+4. **Migration idempotency test** — `supabase db reset` twice in CI, confirm no errors. Automated in `.github/workflows/ci.yml`'s `database-ci` job.
+5. **Trigger correctness tests** — insert a `check_ins` row, assert: `events.live_attendee_count` incremented, `energy_score_events` row created with `reason = 'event_checkin'`, `profiles.energy_score` recomputed, and the user was added to the event's `conversation_participants`. Not yet a dedicated pgTAP file — the RLS tests above exercise this path indirectly but don't assert on it directly.
+6. **Load test targets** — `nearby_events` and `discover_people` are called on nearly every app open; benchmark p95 latency at expected concurrent-user counts before mobile integration locks in assumptions about client-side caching needs.

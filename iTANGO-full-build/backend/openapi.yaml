@@ -331,3 +331,75 @@ paths:
       responses:
         '200': { description: Redeemed }
         '404': { description: Voucher not claimed by this user, or already redeemed }
+
+  /staff-checkin:
+    post:
+      summary: Organizer/staff scans an attendee's ticket QR to check them in
+      description: >
+        Distinct auth model from /checkins: the caller (organizer or staff)
+        is authenticated, but the check_ins row created belongs to the
+        ATTENDEE decoded from the QR token, not the caller. The caller must
+        be the event's organizer or an admin/moderator — verified
+        server-side against `events.organizer_id`, never trusted from a
+        client-supplied claim. Added in Phase 5 follow-up; required a
+        dedicated RLS policy (migration 019) since the original check-in
+        policy only permitted self-insert.
+      tags: [Events]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [qr_token]
+              properties:
+                qr_token: { type: string }
+      responses:
+        '201':
+          description: Attendee checked in
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  check_in_id: { type: string, format: uuid }
+                  attendee:
+                    type: object
+                    properties:
+                      display_name: { type: string }
+                      username: { type: string }
+                      avatar_url: { type: string }
+                  event_title: { type: string }
+        '400': { description: Invalid QR token, ticket not paid, or caller not authorized for this event }
+        '409': { description: This attendee has already been checked in }
+
+  /register-device-token:
+    post:
+      summary: Register or refresh an FCM device token for push notifications
+      tags: [Notifications]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fcm_token, platform]
+              properties:
+                fcm_token: { type: string }
+                platform: { type: string, enum: [ios, android] }
+      responses:
+        '200': { description: Token registered }
+
+  /send-push-notification:
+    post:
+      summary: Internal — delivers a push notification via FCM HTTP v1
+      description: >
+        Not called by any client. Triggered exclusively by a Supabase
+        Database Webhook on INSERT to the `notifications` table (see
+        devops/scripts/setup-supabase-projects.md §6 for the webhook
+        configuration this depends on). Documented here for completeness
+        of the deployed function surface, not as a public API endpoint.
+      tags: [Notifications]
+      security: []
+      responses:
+        '200': { description: Delivery attempted (see response body for per-device success/failure counts) }

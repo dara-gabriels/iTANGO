@@ -10,7 +10,10 @@ app = "itango-web-production"
 primary_region = "ams"
 
 [build]
-  dockerfile = "../../../docker/Dockerfile.web"
+  # Dockerfile path intentionally NOT set here — see the deploy workflow's
+  # explicit --dockerfile flag, and the matching comment in
+  # fly.staging.toml for why relying on this file's own relative-path
+  # resolution is the wrong place to specify it.
 
 [env]
   PORT = "3000"

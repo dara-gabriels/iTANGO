@@ -14,6 +14,8 @@ import '../../features/home/presentation/chats_screen.dart';
 import '../../features/home/presentation/profile_screen.dart';
 import '../../features/events/presentation/event_detail_screen.dart';
 import '../../features/events/presentation/check_in_screen.dart';
+import '../../features/events/presentation/my_ticket_screen.dart';
+import '../../features/events/domain/event_detail_models.dart';
 import '../../features/chat/presentation/conversation_screen.dart';
 import '../../features/notifications/presentation/notifications_screen.dart';
 import '../../features/stories/presentation/story_viewer_screen.dart';
@@ -31,6 +33,7 @@ abstract class AppRoutes {
   static const profile = '/profile';
   static const eventDetail = '/events/:eventId';
   static const eventCheckIn = '/events/:eventId/checkin';
+  static const eventTicket = '/events/:eventId/ticket';
   static const conversation = '/chats/:conversationId';
   static const notifications = '/notifications';
   static const storyViewer = '/stories/:userId';
@@ -40,6 +43,7 @@ abstract class AppRoutes {
 
   static String eventDetailPath(String eventId) => '/events/$eventId';
   static String eventCheckInPath(String eventId) => '/events/$eventId/checkin';
+  static String eventTicketPath(String eventId) => '/events/$eventId/ticket';
   static String conversationPath(String conversationId) => '/chats/$conversationId';
 }
 
@@ -113,6 +117,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             eventId: state.pathParameters['eventId']!,
             eventTitle: extra?['eventTitle'] as String? ?? 'this event',
           );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.eventTicket,
+        builder: (_, state) {
+          final event = state.extra as EventDetail;
+          return MyTicketScreen(event: event);
         },
       ),
       GoRoute(

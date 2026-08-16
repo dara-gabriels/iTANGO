@@ -163,13 +163,28 @@ class _ActionSection extends ConsumerWidget {
     }
 
     if (event.hasValidTicket) {
-      return ItangoGradientButton(
-        label: "You're going — Check In",
-        icon: Icons.location_on_rounded,
-        onPressed: () => context.push(
-          AppRoutes.eventCheckInPath(event.id),
-          extra: {'eventTitle': event.title},
-        ),
+      return Column(
+        children: [
+          ItangoGradientButton(
+            label: 'Show My Ticket QR',
+            icon: Icons.qr_code_rounded,
+            onPressed: () => context.push(AppRoutes.eventTicketPath(event.id), extra: event),
+          ),
+          const SizedBox(height: ItangoSpacing.s3),
+          OutlinedButton.icon(
+            onPressed: () => context.push(
+              AppRoutes.eventCheckInPath(event.id),
+              extra: {'eventTitle': event.title},
+            ),
+            icon: const Icon(Icons.location_on_rounded, color: ItangoColors.textSecondary),
+            label: const Text('No scanner? Check in with location', style: TextStyle(color: ItangoColors.textSecondary)),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(48),
+              side: const BorderSide(color: ItangoColors.borderDefault),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(ItangoRadius.pill)),
+            ),
+          ),
+        ],
       );
     }
 

@@ -6,7 +6,14 @@ app = "itango-web-staging"
 primary_region = "ams" # Amsterdam — closest Fly region to Lagos with full feature availability at time of writing; revisit if Fly adds a Lagos/West-Africa region
 
 [build]
-  dockerfile = "../../../docker/Dockerfile.web"
+  # Dockerfile path intentionally NOT set here — see the deploy workflow's
+  # explicit --dockerfile flag. Fly.io resolves an in-file relative path
+  # against the directory containing this fly.toml, but flyctl is actually
+  # invoked from the repo root in CI (confirmed: no working-directory
+  # override on that step), and mixing those two resolution contexts is
+  # exactly the kind of ambiguity that works locally and breaks in CI, or
+  # vice versa. An explicit --dockerfile flag on the CLI call removes the
+  # ambiguity rather than relying on either assumption being correct.
 
 [env]
   PORT = "3000"

@@ -10,12 +10,11 @@
 | `supabase/functions/tickets-purchase/` | Ticket purchase initiation across PSPs + wallet, split-payment notification fan-out |
 | `supabase/functions/webhooks-paystack/` | Signature-verified, idempotent payment webhook handler (service-role client) |
 | `supabase/functions/events/` | Organizer event creation with validation beyond single-table constraints |
-| `supabase/functions/nearby-events/` | Thin wrapper around the `nearby_events` SQL function (Phase 4) |
-| `supabase/functions/discover-people/` | Thin wrapper around `discover_people`, with a hard server-side radius cap regardless of client input |
+| `supabase/functions/nearby-events/` | Thin wrapper around the `nearby_events` SQL function. **Currently unused** — the Flutter mobile client calls `nearby_events` directly via `client.rpc()`, bypassing this function entirely (found during full-stack verification). Kept as the documented contract for any future consumer that shouldn't call Postgres RPC directly (e.g. a public widget with no Supabase client of its own). |
+| `supabase/functions/discover-people/` | Thin wrapper around `discover_people`. **Currently unused for the same reason as `nearby-events` above** — the radius cap this function's comment describes is now also enforced *inside the Postgres function itself* (migration 020), specifically because this wrapper being bypassed meant the cap wasn't actually protecting the real client. Defense-in-depth: both layers cap it now, but the database is the layer that's guaranteed to be hit. |
 | `supabase/functions/register-device-token/` | Upserts a device's FCM token, called on login and token refresh |
 | `supabase/functions/send-push-notification/` | Triggered by a Supabase DB Webhook on `notifications` INSERT — delivers via FCM HTTP v1 (OAuth2 service-account flow, implemented directly via Web Crypto since Firebase Admin SDK isn't Deno-compatible) |
 | `supabase/functions/staff-checkin/` | Organizer/staff-authenticated: scans an **attendee's** ticket QR to check them in — distinct auth model from `checkins/` (self-check-in). Required a new RLS policy (migration 019) since the existing check-in policy only allowed self-insert. |
-| `supabase/migrations_addendum/012_wallet_settlement_function.sql` | Atomic wallet debit function (row-locked, avoids race conditions under concurrent purchases) — file into the Phase 4 migrations directory as migration 012 |
 
 ## Why so few functions are "thin CRUD"
 

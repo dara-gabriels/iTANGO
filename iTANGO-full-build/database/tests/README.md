@@ -22,8 +22,9 @@ private data by querying the table directly, bypassing the UI entirely" —
 a class of bug that's invisible in normal QA (the app never exposes it)
 and catastrophic in production (anyone with basic API knowledge can find it).
 
-## Coverage in `001_rls_policies_test.sql`
+## Coverage across all test files
 
+**`001_rls_policies_test.sql`:**
 - `check_ins`: own-row read, organizer-of-event read, cross-user denial
 - `messages` in event rooms: the core check-in trust gate — a user who
   never checked in cannot post, even with a valid conversation_id
@@ -32,6 +33,20 @@ and catastrophic in production (anyone with basic API knowledge can find it).
   `forbid_audit_log_mutation` trigger from migration 008)
 - `vouchers`: issuing business owner can manage, others cannot
 - `profiles`: public read (by design) but own-row-only write
+
+**`002_event_approval_test.sql`:**
+- Verifies the security bug fixed in migration 017: a `pending_review`
+  event with `visibility = 'public'` is NOT visible to an unrelated public
+  user (the original RLS policy checked visibility but never status)
+- `publish_event()` correctly branches to `pending_review` when the
+  `platform_settings` approval toggle is on
+- A non-admin cannot call `approve_event()`
+- After admin approval, the event becomes publicly visible
+
+**`003_staff_checkin_rls_test.sql`:**
+- Verifies migration 019: an event's organizer CAN insert a `check_ins`
+  row on behalf of an attendee (the staff QR check-in flow)
+- An unrelated user (not the organizer, not an admin) CANNOT do the same
 
 ## What's NOT yet covered here (honest gap, not exhaustive)
 

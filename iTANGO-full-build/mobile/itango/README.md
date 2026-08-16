@@ -11,7 +11,7 @@
 - **Discover** — calls `discover_people` RPC, vibe-tag filter chips backed by the real `vibe_tag_name` enum, "Say Hi" writes a real DM
 - **Chats** — Stories row (tappable, opens the real full-screen viewer), Highlights row, Event Rooms list (joined against `room_engagement_snapshots` for the live 🔥 temperature indicator), Direct Messages list
 - **Profile** — Passport layout: energy score badge with "Top 5%" cohort check, Voucher Wallet, Achievements grid
-- **Event detail → ticket purchase → check-in → event chat** — the full consumer core loop, including the PSP redirect flow and geofence self-check-in (see the design note at the top of `check_in_screen.dart` for why geofence, not QR-scanning, is the correct consumer-app flow)
+- **Event detail → ticket purchase → check-in → event chat** — the full consumer core loop, including the PSP redirect flow, geofence self-check-in, and now **the ticket QR display screen** (`my_ticket_screen.dart`) — found missing during a full-stack verification pass: the staff-scan check-in flow (web organizer dashboard scanning an attendee's ticket) had no way to actually work without a screen showing the attendee their QR code. Fixed.
 - **Conversation thread screen** — real Supabase Realtime message stream + composer, **image attachments, voice notes (real recording + playback), emoji reactions, and DM read receipts ("Seen"/"Delivered")**. Media is private (signed URLs, not public links) — see the Storage RLS policy in `database/migrations/018_message_media_storage_rls.sql`.
 - **Onboarding** — 4-step flow writing real rows to `profiles` and `user_vibe_tags`
 - **Push notifications** — FCM token registration/refresh, real-time in-app notification list, live unread badge

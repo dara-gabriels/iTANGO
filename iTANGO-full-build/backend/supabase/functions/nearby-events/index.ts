@@ -3,8 +3,15 @@
 // GET /events/nearby?lat=&lng=&radius_km=&limit=
 // Deliberately a thin wrapper: all the actual query logic (PostGIS distance,
 // index usage) lives in the `nearby_events` SQL function (database migration
-// 011) so it can be reused from other server contexts (e.g. a future
-// scheduled digest job) without duplicating query logic in TypeScript.
+// 011) so it can be reused from other server contexts without duplicating
+// query logic in TypeScript.
+//
+// STATUS: the Flutter mobile client currently calls `nearby_events`
+// directly via `client.rpc()`, bypassing this function (found during
+// full-stack verification). Not a security issue here the way it was for
+// discover-people — event data is public and this function never claimed
+// a cap the RPC lacked — but flagged for the same honesty reason: this
+// isn't load-bearing for the app that exists today.
 
 import { getUserScopedClient, jsonResponse, handleKnownErrors, ValidationError, CORS_HEADERS } from "../_shared/http.ts";
 

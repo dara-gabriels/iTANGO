@@ -1,11 +1,18 @@
 // supabase/functions/discover-people/index.ts
 //
 // GET /discover/people?lat=&lng=&vibe_tag=&radius_km=
-// Unlike nearby-events, this endpoint REQUIRES authentication — it exposes
-// other users' approximate location and profile data, which is exactly the
-// kind of surface that must not be reachable anonymously or scraped at
-// scale. The underlying `discover_people` SQL function also excludes users
-// who have blocked/been blocked by the caller (see migration 011).
+// Requires authentication — it exposes other users' approximate location
+// and profile data.
+//
+// STATUS (found during full-stack verification): the Flutter mobile client
+// currently calls `discover_people` directly via `client.rpc()`, bypassing
+// this function entirely. The radius cap below is still correct to keep —
+// defense in depth — but it is NOT the layer actually protecting the real
+// client; that enforcement was moved into the `discover_people` Postgres
+// function itself (migration 020) specifically because this wrapper being
+// skippable meant the cap wasn't reliably applied. This function remains
+// the documented contract for any future caller that shouldn't talk to
+// Postgres RPC directly (e.g. a server-to-server integration).
 
 import { getUserScopedClient, requireAuthenticatedUser, jsonResponse, handleKnownErrors, ValidationError, CORS_HEADERS } from "../_shared/http.ts";
 
