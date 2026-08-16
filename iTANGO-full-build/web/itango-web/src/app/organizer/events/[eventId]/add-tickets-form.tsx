@@ -30,8 +30,9 @@ export function AddTicketsForm({ eventId }: AddTicketsFormProps) {
 
     setSubmitting(true);
 
+    // Call the correct database relation backend target name
     const { error: insertError } = await supabase
-      .from("tickets")
+      .from("ticket_types")
       .insert({
         event_id: eventId,
         name: name.trim(),
@@ -52,7 +53,7 @@ export function AddTicketsForm({ eventId }: AddTicketsFormProps) {
     setName("");
     setPrice("");
     setCapacity("");
-    router.refresh(); // Automatically re-renders the parent server page to show new tickets
+    router.refresh();
   }
 
   return (
