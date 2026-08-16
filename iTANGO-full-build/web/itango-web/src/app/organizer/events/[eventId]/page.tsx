@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { PublishButton } from "./publish-button";
+import { AddTicketsForm } from "./add-tickets-form";
 
 interface EventPageProps {
   params: { eventId: string };
@@ -18,10 +19,6 @@ async function getOrganizerEvent(eventId: string, userId: string) {
     .single();
 
   if (error || !event) return null;
-  // Defense in depth: RLS already scopes updates to the organizer, but a
-  // SELECT by id has no such implicit filter — verify ownership explicitly
-  // before rendering sales figures, so a guessed event ID from another
-  // organizer never displays here even transiently.
   if (event.organizer_id !== userId) return null;
 
   return event;
@@ -66,13 +63,15 @@ export default async function OrganizerEventDetailPage({ params }: EventPageProp
         <StatCard label="Checked In" value={event.live_attendee_count.toString()} />
       </div>
 
-      <h2 className="text-h2 mb-4">Ticket Types</h2>
+      <h2 className="text-h2 mb-4">Manage Ticketing</h2>
+      
+      {/* Dynamic Ticket Input Form Engine */}
+      <AddTicketsForm eventId={event.id} />
+
+      <h2 className="text-h2 mb-4 mt-8">Active Ticket Tiers</h2>
       {event.tickets.length === 0 ? (
         <p className="text-text-secondary mb-6">
-          No ticket types yet.{" "}
-          <span className="text-text-tertiary text-caption">
-            (Ticket creation UI is the next build pass on this dashboard — tickets can be added directly via the `tickets` table today.)
-          </span>
+          No ticket types added yet. Use the tool configuration panel above to create your first pricing tier.
         </p>
       ) : (
         <div className="space-y-3">
