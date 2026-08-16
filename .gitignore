@@ -1,2 +1,21 @@
 *:Zone.Identifier
 *:Zone.Identifier
+*node_modules/
+node_modules/
+
+# Flutter build artifacts
+.dart_tool/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Terraform files
+.terraform/
+*.tfstate*
+
+# Environment variables
+.env
+
+# VS Code settings and workspace files
+.vscode/
+*.code-workspace
