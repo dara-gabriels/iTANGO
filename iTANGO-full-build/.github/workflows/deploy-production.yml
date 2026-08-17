@@ -98,7 +98,7 @@ jobs:
       - name: Hit the health check endpoint
         run: |
           for i in 1 2 3 4 5; do
-            status=$(curl -s -o /dev/null -w "%{http_code}" https://itango.app/api/health)
+            status=$(curl -s -o /dev/null -w "%{http_code}" https://itango.com.ng/api/health)
             if [ "$status" = "200" ]; then
               echo "Health check passed"
               exit 0
