@@ -8,6 +8,8 @@ import '../../../core/theme/itango_theme.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/supabase/supabase_providers.dart';
 import '../../notifications/domain/notification_models.dart';
+import '../../feed/data/feed_repository.dart';
+import '../../feed/presentation/feed_post_card.dart';
 
 /// Model for a single row returned by the `nearby_events` Postgres function
 /// (Phase 4/5). Kept minimal — full ticket/venue detail is fetched on the
@@ -64,6 +66,7 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final nearbyEvents = ref.watch(nearbyEventsProvider);
+    final localizedFeed = ref.watch(localizedFeedProvider);
 
     return Scaffold(
       backgroundColor: ItangoColors.bgBase,
@@ -78,28 +81,65 @@ class HomeScreen extends ConsumerWidget {
       ),
       body: RefreshIndicator(
         color: ItangoColors.brandPrimary,
-        onRefresh: () async => ref.invalidate(nearbyEventsProvider),
-        child: nearbyEvents.when(
-          loading: () => const Center(child: CircularProgressIndicator(color: ItangoColors.brandPrimary)),
-          error: (err, _) => _ErrorState(message: err.toString(), onRetry: () => ref.invalidate(nearbyEventsProvider)),
-          data: (events) => events.isEmpty
-              ? const _EmptyState()
-              : ListView(
-                  padding: const EdgeInsets.all(ItangoSpacing.s4),
-                  children: [
-                    Text('Live Events Happening Now', style: Theme.of(context).textTheme.headlineSmall),
-                    const SizedBox(height: ItangoSpacing.s3),
-                    SizedBox(
-                      height: 220,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: events.length,
-                        separatorBuilder: (_, __) => const SizedBox(width: ItangoSpacing.s3),
-                        itemBuilder: (_, i) => _EventCard(event: events[i]),
-                      ),
-                    ),
-                  ],
-                ),
+        onRefresh: () async {
+          ref.invalidate(nearbyEventsProvider);
+          ref.invalidate(localizedFeedProvider);
+        },
+        child: ListView(
+          padding: const EdgeInsets.all(ItangoSpacing.s4),
+          children: [
+            // Section 1: Nearby Live Events Component Row
+            Text('Live Events Happening Now', style: Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(height: ItangoSpacing.s3),
+            nearbyEvents.when(
+              loading: () => const SizedBox(height: 120, child: Center(child: CircularProgressIndicator(color: ItangoColors.brandPrimary))),
+              error: (err, _) => _ErrorCard(message: "Couldn't load nearby events.", onRetry: () => ref.invalidate(nearbyEventsProvider)),
+              data: (events) {
+                if (events.isEmpty) {
+                  return Container(
+                    height: 100,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(color: ItangoColors.bgSurface, borderRadius: BorderRadius.circular(ItangoRadius.lg)),
+                    child: const Text("No events nearby right now.", style: TextStyle(color: ItangoColors.textSecondary, fontSize: 13)),
+                  );
+                }
+                return SizedBox(
+                  height: 220,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: events.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: ItangoSpacing.s3),
+                    itemBuilder: (_, i) => _EventCard(event: events[i]),
+                  ),
+                );
+              },
+            ),
+
+            const SizedBox(height: ItangoSpacing.s6),
+
+            // Section 2: Blended Proximity Social Feed System
+            Text('What\'s Happening Near You', style: Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(height: ItangoSpacing.s3),
+            localizedFeed.when(
+              loading: () => const Center(child: Padding(padding: EdgeInsets.all(ItangoSpacing.s5), child: CircularProgressIndicator(color: ItangoColors.brandPrimary))),
+              error: (err, _) => _ErrorCard(message: "Couldn't load your feed.", onRetry: () => ref.invalidate(localizedFeedProvider)),
+              data: (posts) {
+                if (posts.isEmpty) {
+                  return Container(
+                    padding: const EdgeInsets.all(ItangoSpacing.s6),
+                    alignment: Alignment.center,
+                    child: const Text("Nothing posted in your 15km bubble yet. Be the first to share!", style: TextStyle(color: ItangoColors.textSecondary), textAlign: TextAlign.center),
+                  );
+                }
+                return ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(), // Delegates scroll controls to the parent container
+                  itemCount: posts.length,
+                  itemBuilder: (_, i) => FeedPostCard(post: posts[i]),
+                );
+              },
+            ),
+          ],
         ),
       ),
     );
@@ -188,41 +228,21 @@ class _EventCard extends StatelessWidget {
   }
 }
 
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Padding(
-        padding: EdgeInsets.all(ItangoSpacing.s6),
-        child: Text(
-          "No events nearby right now — check back later, or widen your search radius in Discover.",
-          style: TextStyle(color: ItangoColors.textSecondary),
-          textAlign: TextAlign.center,
-        ),
-      ),
-    );
-  }
-}
-
-class _ErrorState extends StatelessWidget {
-  const _ErrorState({required this.message, required this.onRetry});
+class _ErrorCard extends StatelessWidget {
+  const _ErrorCard({required this.message, required this.onRetry});
   final String message;
   final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(ItangoSpacing.s6),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text("Couldn't load nearby events.", style: TextStyle(color: ItangoColors.textPrimary)),
-            const SizedBox(height: ItangoSpacing.s3),
-            TextButton(onPressed: onRetry, child: const Text('Retry', style: TextStyle(color: ItangoColors.brandPrimary))),
-          ],
-        ),
+    return Container(
+      padding: const EdgeInsets.all(ItangoSpacing.s4),
+      decoration: BoxDecoration(color: ItangoColors.bgSurface, borderRadius: BorderRadius.circular(ItangoRadius.lg)),
+      child: Row(
+        children: [
+          Expanded(child: Text(message, style: const TextStyle(color: ItangoColors.textPrimary, fontSize: 13))),
+          TextButton(onPressed: onRetry, child: const Text('Retry', style: TextStyle(color: ItangoColors.brandPrimary, fontSize: 13))),
+        ],
       ),
     );
   }
